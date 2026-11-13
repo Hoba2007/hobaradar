@@ -1,0 +1,39 @@
+rules_version = '2';
+
+// Hoba Radar — recommended Firestore security rules.
+// Deploy with: firebase deploy --only firestore:rules
+// (Project ID: hoba-radar)
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Newsletter subscribers: clients may only ADD an email, never read or
+    // enumerate the list. Server-side (Admin SDK / Cloud Function) reads it.
+    match /subscribers/{email} {
+      allow create: if request.resource.data.keys().hasOnly(['email', 'createdAt', 'source'])
+                    && request.resource.data.email is string
+                    && request.resource.data.email.size() <= 320;
+      allow read, update, delete: if false;
+    }
+
+    // FCM push tokens: a device may register/update its own token document.
+    // Tokens are read only by the backend that broadcasts notifications.
+    match /fcm_tokens/{token} {
+      allow create, update: if request.resource.data.keys().hasOnly(['token', 'platform', 'createdAt'])
+                            && request.resource.data.token is string
+                            && request.resource.data.token.size() <= 4096;
+      allow read, delete: if false;
+    }
+
+    // Editorial content: publicly readable, writable only from the newsroom
+    // backend (Admin SDK) or Firebase Auth-claimed editors.
+    match /articles/{slug} {
+      allow read: if true;
+      allow write: if false; // open via Admin SDK only; or grant to role='editor'
+    }
+
+    // Everything else: deny by default.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
